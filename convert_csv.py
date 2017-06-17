@@ -126,6 +126,7 @@ if __name__ == "__main__":
         xml_waypoints += XML_WAYPOINT_TEMPLATE.format(name='{name} {note}'.format(name=name, note=note),
                                                       lat=new_lat, lon=new_lon)
 
+    xml_tracks += XML_TRACK_TEMPLATE.format(track_points=xml_trackpoints, name=prev_name)
     full_xml = XML_TEMPLATE.format(tracks=xml_tracks, waypoints=xml_waypoints)
 
     with open(args.file + '.gpx', 'w', newline='') as fp:
