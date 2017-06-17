@@ -6,19 +6,39 @@ Coordinate transformer
 import argparse
 import logging
 from urllib.error import HTTPError
-
 import pandas as pd
 import requests
 import time
 from lxml import etree
 
-
 logging.basicConfig(  # filename='classifier.log',
-                    filemode='a',
-                    level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    filemode='a',
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 logger = logging.getLogger(__name__)
+
+XML_TEMPLATE = '''<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.0">
+  {waypoints}
+  {tracks}
+</gpx>
+'''
+
+XML_TRACK_TEMPLATE = '''
+  <trk><name>{name}</name><trkseg>
+        {track_points}
+    </trkseg></trk>
+'''
+
+# XML_TRACK_POINT_TEMPLATE = '<trkpt lat="{lat}" lon="{lon}"><ele>4.46</ele><time>2009-10-17T18:37:26Z</time></trkpt>\n'
+XML_TRACK_POINT_TEMPLATE = '<trkpt lat="{lat}" lon="{lon}" />\n'
+
+XML_WAYPOINT_TEMPLATE = '''
+<wpt lat="{lat}" lon="{lon}">
+    <name>{name}</name>
+</wpt>
+'''
 
 
 def post(url, data, retries=0, wait=1):
@@ -54,7 +74,7 @@ def post(url, data, retries=0, wait=1):
             tries -= 1
             if tries:
                 logger.warning('Received error ({}) from {} with request data: {}.'
-                        .format(e, url, data))
+                               .format(e, url, data))
                 logger.warning('Waiting {} seconds before retrying'.format(wait))
                 time.sleep(wait)
                 continue
@@ -66,18 +86,30 @@ def post(url, data, retries=0, wait=1):
             logger.debug('Success, received: {}'.format(res))
             return res
 
+
 if __name__ == "__main__":
 
     argparser = argparse.ArgumentParser(description="Coordinate transformer", fromfile_prefix_chars='@')
     argparser.add_argument("file", help="CSV file to read coords from")
     args = argparser.parse_args()
 
-
     coords = pd.read_csv(args.file, sep=",")
-
+    xml_tracks = ''
+    xml_trackpoints = ''
+    xml_waypoints = ''
+    prev_name = ''
+    prev_note = ''
 
     for coord in coords.iterrows():
         name, y, x, note = coord[1][:4]
+
+        if name != prev_name:
+            if xml_trackpoints:
+                xml_tracks += XML_TRACK_TEMPLATE.format(track_points=xml_trackpoints,
+                                                        name=prev_name)
+            xml_trackpoints = ''
+            prev_name = name
+            prev_note = note
 
         data = dict(action_route='Coordinates',
                     targetSRS='EPSG:4258',
@@ -88,7 +120,13 @@ if __name__ == "__main__":
         res = post('https://hkp.maanmittauslaitos.fi/hkp/action', data)
         new_lat = res['lat']
         new_lon = res['lon']
-        print('{name} - {note}:'.format(name=name, note=note))
-        print('Latitude: %s' % new_lat)
-        print('Longitude: %s' % new_lon)
-        print()
+        print('{name} {note} - lat: {lat}   lon: {lon}'.format(name=name, note=note, lat=new_lat, lon=new_lon))
+
+        xml_trackpoints += XML_TRACK_POINT_TEMPLATE.format(lat=new_lat, lon=new_lon)
+        xml_waypoints += XML_WAYPOINT_TEMPLATE.format(name='{name} {note}'.format(name=name, note=note),
+                                                      lat=new_lat, lon=new_lon)
+
+    full_xml = XML_TEMPLATE.format(tracks=xml_tracks, waypoints=xml_waypoints)
+
+    with open(args.file + '.gpx', 'w', newline='') as fp:
+        fp.write(full_xml)
