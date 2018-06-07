@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #  -*- coding: UTF-8 -*-
 """
-Coordinate transformer
+Wrap route coordinates to GPX format. Use e.g. http://coordtrans.fgi.fi/transform-form.do to actually transform.
 """
 import argparse
 import logging
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     for coord in coords.iterrows():
         name, y, x, note = coord[1][:4]
 
-        if name != prev_name:
+        if name.split(' ')[0] != prev_name.split(' ')[0]:
             if xml_trackpoints:
                 xml_tracks += XML_TRACK_TEMPLATE.format(track_points=xml_trackpoints,
                                                         name=prev_name)
@@ -117,9 +117,11 @@ if __name__ == "__main__":
                     lat=y,
                     lon=x)
 
-        res = post('https://hkp.maanmittauslaitos.fi/hkp/action', data)
-        new_lat = res['lat']
-        new_lon = res['lon']
+        # res = post('https://hkp.maanmittauslaitos.fi/hkp/action', data)
+        # new_lat = res['lat']
+        # new_lon = res['lon']
+        new_lat = x
+        new_lon = y
         print('{name} {note} - lat: {lat}   lon: {lon}'.format(name=name, note=note, lat=new_lat, lon=new_lon))
 
         xml_trackpoints += XML_TRACK_POINT_TEMPLATE.format(lat=new_lat, lon=new_lon)
